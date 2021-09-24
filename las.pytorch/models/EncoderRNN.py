@@ -46,7 +46,7 @@ class EncoderRNN(nn.Module):
             raise ValueError("Unsupported RNN Cell: {0}".format(rnn_cell))
 
         """
-        Copied from https://github.com/SeanNaren/deepspeech.pytorch/blob/master/model.py
+        Copied from https://github.com/SeanNaren/deepspeech.pytorch/blob/master/deepspeech_pytorch/model.py
         Copyright (c) 2017 Sean Naren
         MIT License
         """
