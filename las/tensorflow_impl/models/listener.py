@@ -2,7 +2,11 @@ import tensorflow as tf
 import numpy as np
 
 
-class Listener(tf.keras.Model):
+class Encoder(tf.keras.Model):
+    pass
+
+
+class Listener(Encoder):
 
     def __init__(self, input_shape):
         super(Listener, self).__init__()
@@ -34,6 +38,8 @@ class PyramidalBiLSTM(tf.keras.layers.Layer):
         for layer in self.stack.layers:
             h = tf.reshape(h, (h.shape[0], -1, h.shape[-1] * 2))
             h = layer(h)
+        # if h.shape[1] % 2 == 1:
+        #     h = tf.keras.layers.ZeroPadding1D(padding=(0, 1))(h)
         return h
 
 
