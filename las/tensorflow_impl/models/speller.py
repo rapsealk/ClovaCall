@@ -1,5 +1,4 @@
 import tensorflow as tf
-import numpy as np
 
 
 class Decoder(tf.keras.Model):
@@ -8,12 +7,20 @@ class Decoder(tf.keras.Model):
 
 class Speller(Decoder):
 
-    def __init__(self):
+    def __init__(self, units, output_shape=46):
         super(Speller, self).__init__()
-        self.lstm = tf.keras.layers.LSTM(32, return_sequences=True, return_state=True)
+        self.attention_context = AttentionLSTM(units)
+        self.rnn = tf.keras.Sequential([
+            tf.keras.layers.LSTM(units, return_sequences=True),
+            tf.keras.layers.LSTM(units)
+        ])
+        self.character_distribution = tf.keras.layers.Dense(output_shape)
 
-    def call(self, x):
-        pass
+    def call(self, x, y):
+        c = self.attention_context(x, y)
+        s = self.rnn(c)
+        y = self.character_distribution(s)
+        return tf.nn.softmax(y)
 
 
 class AttentionLSTM(tf.keras.layers.Layer):
@@ -21,55 +28,20 @@ class AttentionLSTM(tf.keras.layers.Layer):
     def __init__(self, units, return_state=False):
         super(AttentionLSTM, self).__init__()
         self.cell = tf.keras.layers.LSTMCell(units)
+        self.attention = tf.keras.layers.Attention()
 
-    def call(self, x):
-        h = self.cell.get_initial_state(x)
+    def call(self, x, y):
+        h = self.cell.get_initial_state(y)
         outputs = []
-        for i in range(x.shape[1]):
-            s, *h = self.cell(tf.expand_dims(x[0, i], axis=0), h)
-            outputs.append(s)
-            h = tf.squeeze(h, axis=0)
+        for i in range(y.shape[1]):
+            s, *h = self.cell(y[:, i], h)
+            c = self.attention([tf.expand_dims(s, axis=1), x])
+            outputs.append(c)
+            h = tf.squeeze(h, axis=0) + c
 
-        return tf.stack(outputs)
+        # return tf.nn.softmax(tf.squeeze(tf.stack(outputs)))
+        return tf.squeeze(tf.stack(outputs), axis=1)
 
 
 if __name__ == "__main__":
-    units = 2
-
-    np.random.seed(42)
-    x = np.random.uniform(-1.0, 1.0, (1, 4, 2))
-    x = tf.convert_to_tensor(x)
-
-    """
-    query: [batch_size, Tq, dim]
-    value: [batch_size, Tv, dim]
-    key: [batch_size, Tk, dim]
-    """
-    # attn = tf.keras.layers.Attention()
-    # print(attn([x, x]))
-
-    lstm = tf.keras.layers.LSTM(units, return_sequences=True)
-    h = lstm(x)
-    # y
-    s = tf.convert_to_tensor(
-        np.random.uniform(-1, 1, (1, 1, 2)).astype(np.float32))
-    print(f'h: {h} ({h.shape}, dtype={h.dtype})')
-    print(f's: {s} ({s.shape}, dtype={s.dtype})')
-    # h_ = s + h  # tf.concat([s, h], axis=-1)
-    # print(f'h_: {h_} ({h_.shape}, dtype={h_.dtype})')
-
-    # attention = tf.keras.layers.Attention()
-    # c = attention([s, h])
-    # print(f'attn_ctx: {c} ({c.shape})')
-
-    decoder_units = units
-
-    """
-    attn_lstm = tf_addons.seq2seq.AttentionWrapper(
-        tf.keras.layers.LSTMCell(units),
-        # attention_mechanism=tf_addons.seq2seq.BahdanauAttention(units),
-        attention_mechanism=tf_addons.seq2seq.LuongAttention(units)
-    )
-
-    output = attn_lstm(s, h)
-    """
+    pass
