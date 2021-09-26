@@ -1,5 +1,4 @@
 import tensorflow as tf
-import tensorflow_addons as tf_addons
 import numpy as np
 
 
@@ -19,11 +18,19 @@ class Speller(Decoder):
 
 class AttentionLSTM(tf.keras.layers.Layer):
 
-    def __init__(self):
+    def __init__(self, units, return_state=False):
         super(AttentionLSTM, self).__init__()
+        self.cell = tf.keras.layers.LSTMCell(units)
 
     def call(self, x):
-        pass
+        h = self.cell.get_initial_state(x)
+        outputs = []
+        for i in range(x.shape[1]):
+            s, *h = self.cell(tf.expand_dims(x[0, i], axis=0), h)
+            outputs.append(s)
+            h = tf.squeeze(h, axis=0)
+
+        return tf.stack(outputs)
 
 
 if __name__ == "__main__":
@@ -57,6 +64,7 @@ if __name__ == "__main__":
 
     decoder_units = units
 
+    """
     attn_lstm = tf_addons.seq2seq.AttentionWrapper(
         tf.keras.layers.LSTMCell(units),
         # attention_mechanism=tf_addons.seq2seq.BahdanauAttention(units),
@@ -64,3 +72,4 @@ if __name__ == "__main__":
     )
 
     output = attn_lstm(s, h)
+    """
