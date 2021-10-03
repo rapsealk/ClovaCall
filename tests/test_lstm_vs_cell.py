@@ -21,11 +21,11 @@ class LSTMTestCase(tf.test.TestCase):
         tf.random.set_seed(0)
         lstmcell = tf.keras.layers.LSTMCell(units)
         hidden = lstmcell.get_initial_state(inputs)
+        print('hidden:', len(hidden), hidden[0].shape)
 
         outputs = []
         for i in range(inputs.shape[1]):
-            output, *hidden = lstmcell(tf.expand_dims(inputs[0, i], axis=0), hidden)
-            hidden = hidden[0]
+            output, hidden = lstmcell(tf.expand_dims(inputs[0, i], axis=0), hidden)
             outputs.append(output)
         cell_outputs = tf.stack(outputs).numpy().reshape(lstm_output.shape)
 
@@ -33,10 +33,16 @@ class LSTMTestCase(tf.test.TestCase):
         self.assertAllLessEqual(output_diff, 1e-6)
 
         # (3) AttentionLSTM
+        #tf.random.set_seed(0)
+        #model = AttentionLSTM(units)
+        #outputs = model(inputs).numpy().reshape(cell_outputs.shape)
+        #self.assertAllEqual(cell_outputs, outputs)
+
         tf.random.set_seed(0)
-        model = AttentionLSTM(units)
-        outputs = model(inputs).numpy().reshape(cell_outputs.shape)
-        self.assertAllEqual(cell_outputs, outputs)
+        lstm_s = tf.keras.layers.LSTM(units, return_state=True, return_sequences=True)
+        lstm_s_output, *h = lstm_s(inputs)
+        print(f'lstm_output.shape: {lstm_output.shape} / lstm_s_output: {lstm_s_output.shape} {len(h)} {h[0].shape} {h[1].shape}')
+        # self.assertAllEqual(lstm_output.shape, lstm_s_output.shape)
 
 
 if __name__ == "__main__":

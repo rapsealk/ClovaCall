@@ -8,28 +8,29 @@ class Encoder(tf.keras.Model):
 
 class Listener(Encoder):
 
-    def __init__(self, input_shape):
+    def __init__(self, input_shape, units=256):
         super(Listener, self).__init__()
-        self.pyramidal_rnn = PyramidalBiLSTM(input_shape=input_shape)
+        self.pyramidal_rnn = PyramidalBiLSTM(input_shape=input_shape, units=units)
 
     def call(self, x):
+        # FIXME: assert x.shape[0] == 32 (batch)
         x = self.pyramidal_rnn(x)
         return x
 
 
 class PyramidalBiLSTM(tf.keras.layers.Layer):
 
-    def __init__(self, input_shape):
+    def __init__(self, input_shape, units=256):
         super(PyramidalBiLSTM, self).__init__()
         self.bottom = tf.keras.layers.Bidirectional(
-            tf.keras.layers.LSTM(4, return_sequences=True, input_shape=input_shape)
+            tf.keras.layers.LSTM(units, return_sequences=True, input_shape=input_shape)
         )
         self.stack = tf.keras.Sequential([
             tf.keras.layers.Bidirectional(
-                tf.keras.layers.LSTM(4, return_sequences=True)
+                tf.keras.layers.LSTM(units, return_sequences=True)
             ),
             tf.keras.layers.Bidirectional(
-                tf.keras.layers.LSTM(4, return_sequences=True)
+                tf.keras.layers.LSTM(units, return_sequences=True)
             )
         ])
 

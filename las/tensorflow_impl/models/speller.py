@@ -1,4 +1,7 @@
 import tensorflow as tf
+import numpy as np
+
+from las.tensorflow_impl.models.listener import Listener
 
 
 class Decoder(tf.keras.Model):
@@ -7,41 +10,27 @@ class Decoder(tf.keras.Model):
 
 class Speller(Decoder):
 
-    def __init__(self, units, output_shape=46):
+    def __init__(self, units=512, output_shape=46):
         super(Speller, self).__init__()
-        self.attention_context = AttentionLSTM(units)
-        self.rnn = tf.keras.Sequential([
-            tf.keras.layers.LSTM(units, return_sequences=True),
-            tf.keras.layers.LSTM(units)
-        ])
+        self.cells = [tf.keras.layers.LSTMCell(units),
+                      tf.keras.layers.LSTMCell(units)]
+        self.attention = tf.keras.layers.Attention()
         self.character_distribution = tf.keras.layers.Dense(output_shape)
 
-    def call(self, x, y):
-        c = self.attention_context(x, y)
-        s = self.rnn(c)
-        y = self.character_distribution(s)
-        return tf.nn.softmax(y)
+        self.units = units
 
+    def call(self, h, y):
+        context = tf.zeros((1, self.units))
+        hiddens = [cell.get_initial_state(tf.concat([y[:, 0], context], axis=-1))
+                   for cell in self.cells]
 
-class AttentionLSTM(tf.keras.layers.Layer):
-
-    def __init__(self, units, return_state=False):
-        super(AttentionLSTM, self).__init__()
-        self.cell = tf.keras.layers.LSTMCell(units)
-        self.attention = tf.keras.layers.Attention()
-
-    def call(self, x, y):
-        h = self.cell.get_initial_state(y)
-        outputs = []
+        dist = []
         for i in range(y.shape[1]):
-            s, *h = self.cell(y[:, i], h)
-            c = self.attention([tf.expand_dims(s, axis=1), x])
-            outputs.append(c)
-            h = tf.squeeze(h, axis=0) + c
+            x = tf.concat([hiddens[0][0], y[:, i], context], axis=-1)
+            s, hiddens[0] = self.cells[0](x, hiddens[0])
+            context, attn_w = self.attention([s, h], return_attention_scores=True)
+            context = tf.squeeze(context, axis=1)
+            s, hiddens[1] = self.cells[1](context, hiddens[1])
+            dist.append(self.character_distribution(tf.concat([s, context], axis=-1)))
 
-        # return tf.nn.softmax(tf.squeeze(tf.stack(outputs)))
-        return tf.squeeze(tf.stack(outputs), axis=1)
-
-
-if __name__ == "__main__":
-    pass
+        return tf.nn.softmax(dist, axis=-1)
