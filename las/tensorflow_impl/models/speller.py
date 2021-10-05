@@ -1,7 +1,4 @@
 import tensorflow as tf
-import numpy as np
-
-from las.tensorflow_impl.models.listener import Listener
 
 
 class Decoder(tf.keras.Model):
@@ -20,17 +17,25 @@ class Speller(Decoder):
         self.units = units
 
     def call(self, h, y):
-        context = tf.zeros((1, self.units))
+        context = tf.zeros((y.shape[0], self.units))
         hiddens = [cell.get_initial_state(tf.concat([y[:, 0], context], axis=-1))
                    for cell in self.cells]
 
         dist = []
         for i in range(y.shape[1]):
+            """
+            param:quries: Decoder hidden states, Shape=(B, 1, dec_D)
+            param:values: Encoder outputs, Shape=(B, enc_T, enc_D)
+            param:last_attn: Attention weight of previous step, Shape=(batch, enc_T)
+            """
             x = tf.concat([hiddens[0][0], y[:, i], context], axis=-1)
             s, hiddens[0] = self.cells[0](x, hiddens[0])
+            s = tf.expand_dims(s, axis=1)
             context, attn_w = self.attention([s, h], return_attention_scores=True)
             context = tf.squeeze(context, axis=1)
             s, hiddens[1] = self.cells[1](context, hiddens[1])
             dist.append(self.character_distribution(tf.concat([s, context], axis=-1)))
+
+        dist = tf.transpose(dist, perm=[1, 0, 2])
 
         return tf.nn.softmax(dist, axis=-1)

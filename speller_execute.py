@@ -1,3 +1,4 @@
+import argparse
 import string
 
 import tensorflow as tf
@@ -5,14 +6,31 @@ import numpy as np
 
 from las.tensorflow_impl.models import Listener, Speller
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--batch', type=int, default=32)
+args = parser.parse_args()
+
 
 def main():
-    inputs = np.random.uniform(-1.0, 1.0, (1, 4, 8))    # (batch, timestep, size)
+    """
+    batch=1
+        [Speller] x.shape: (1, 1032)
+        [Speller] s.shape: (1, 512)
+        [Speller] context.shape: (1, 1, 512)
+        [Speller] hiddens[1].shape: 2 (1, 512)
+
+    batch=32
+        [Speller] x.shape: (32, 1032)
+        [Speller] s.shape: (32, 512)
+        [Speller] context.shape: (32, 32, 512)
+        [Speller] hiddens[1].shape: 2 (32, 512)
+    """
+    inputs = np.random.uniform(-1.0, 1.0, (args.batch, 16, 8))    # (batch, timestep, size)
     inputs = tf.convert_to_tensor(inputs, dtype=tf.float32)
     vocab_size = len(string.ascii_lowercase) + 1 + 2
 
     # 1. Encoder (Listener)
-    encoder = Listener(input_shape=inputs.shape)
+    encoder = Listener()
     h = encoder(inputs)
 
     """
@@ -52,7 +70,7 @@ def main():
     # 2. Decoder (Speller)
     decoder = Speller()
     prob = decoder(h, inputs)
-    print(prob)
+    # print(prob)
 
 
 if __name__ == "__main__":
