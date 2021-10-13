@@ -1,0 +1,8 @@
+{
+    "dacon": [
+        "https://github.com/TheNewFeature/aihub-competition-hangeul/releases/download/v1.0.0-dacon/dacon.zip",
+        "https://github.com/TheNewFeature/aihub-competition-hangeul/releases/download/v1.0.0-dacon/dacon.z01",
+        "https://github.com/TheNewFeature/aihub-competition-hangeul/releases/download/v1.0.0-dacon/dacon.z02"
+    ],
+    "storage": "http://thenewfeature.asuscomm.com:61111"
+}

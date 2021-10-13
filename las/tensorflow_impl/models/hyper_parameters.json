@@ -1,0 +1,13 @@
+{
+    "batch": 32,
+    "encoder": {
+        "lstm": {
+            "hidden": 256
+        }
+    },
+    "decoder": {
+        "lstm": {
+            "hidden": 512
+        }
+    }
+}
