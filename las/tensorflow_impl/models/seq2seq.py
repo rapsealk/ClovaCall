@@ -12,12 +12,28 @@ class Sequence2Sequence(tf.keras.Model):
         self.encoder = encoder
         self.decoder = decoder
 
-    def call(self, x, tokens):
+    def call(self, x, training=True):
+        x, tokens = x
         # Listen
         h = self.encoder(x)
         # Attend and Spell
         y = self.decoder(h, tokens)
         return y
+
+    def train_step(self, data):
+        x, y = data
+
+        with tf.GradientTape() as tape:
+            y_pred = self((x, y))
+            loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
+
+        y_pred = tf.math.argmax(y_pred, axis=-1)
+        trainable_vars = self.trainable_variables
+        gradients = tape.gradient(loss, trainable_vars)
+        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+        self.compiled_metrics.update_state(y, y_pred)
+
+        return {m.name: m.result() for m in self.metrics}
 
 
 def main():

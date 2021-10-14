@@ -18,7 +18,7 @@ class Speller(Decoder):
 
     def call(self, h, y):
         context = tf.zeros((y.shape[0], self.units))
-        hiddens = [cell.get_initial_state(tf.concat([y[:, 0], context], axis=-1))
+        hiddens = [cell.get_initial_state(tf.concat([tf.expand_dims(y[:, 0], axis=1), context], axis=-1))
                    for cell in self.cells]
 
         dist = []
@@ -28,7 +28,7 @@ class Speller(Decoder):
             param:values: Encoder outputs, Shape=(B, enc_T, enc_D)
             param:last_attn: Attention weight of previous step, Shape=(batch, enc_T)
             """
-            x = tf.concat([hiddens[0][0], y[:, i], context], axis=-1)
+            x = tf.concat([hiddens[0][0], tf.expand_dims(y[:, i], axis=1), context], axis=-1)
             s, hiddens[0] = self.cells[0](x, hiddens[0])
             s = tf.expand_dims(s, axis=1)
             context, attn_w = self.attention([s, h], return_attention_scores=True)

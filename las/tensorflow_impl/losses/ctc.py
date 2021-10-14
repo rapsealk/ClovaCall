@@ -5,6 +5,11 @@ import numpy as np
 class CTCLoss(tf.keras.losses.Loss):
 
     def __init__(self, label_length, logits_time_major=False, blank_index=-1, name='ctc_loss'):
+        """
+        `labels`: [batch_size, max_label_seq_length]
+        `logits`: [batch_size, frames, num_labels]
+        `logits_time_major`: [time, batch, logits] if True else [batch, time, logits]
+        """
         super(CTCLoss, self).__init__(name=name)
         self.label_length = label_length
         self.logits_time_major = logits_time_major
@@ -12,12 +17,9 @@ class CTCLoss(tf.keras.losses.Loss):
 
     def call(self, y_true, y_pred):
         y_true = tf.cast(y_true, tf.int32)
-        """
+        y_true = tf.sparse.from_dense(y_true)
         logit_length = tf.fill(dims=[y_pred.shape[0]], value=y_pred.shape[1])
-        loss = tf.nn.ctc_loss(labels=y_true, logits=y_pred, label_length=None, logit_length=logit_length,
-                              logits_time_major=self.logits_time_major, blank_index=self.blank_index)
-        """
-        logit_length = tf.fill(dims=[y_pred.shape[0]], value=y_pred.shape[1])
+        logit_length = tf.cast(logit_length, dtype=tf.int32)
         loss = tf.nn.ctc_loss(labels=y_true, logits=y_pred, label_length=self.label_length, logit_length=logit_length,
                               logits_time_major=self.logits_time_major, blank_index=self.blank_index)
         return tf.math.reduce_mean(loss)
@@ -80,7 +82,9 @@ def main():
 
     seq_lens = np.array([5, 5], dtype=np.int32)
 
-    loss = tf.nn.ctc_loss(labels=labels, logits=inputs, label_length=10, logit_length=seq_lens, blank_index=10)
+    inputs = np.transpose(inputs, axes=(1, 0, 2))
+
+    loss = tf.nn.ctc_loss(labels=labels, logits=inputs, label_length=10, logit_length=seq_lens, blank_index=10, logits_time_major=False)
 
     print('loss:', loss)
 

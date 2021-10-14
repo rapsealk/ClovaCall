@@ -8,9 +8,9 @@ class Encoder(tf.keras.Model):
 
 class Listener(Encoder):
 
-    def __init__(self, units=256):
+    def __init__(self, input_shape, units=256):
         super(Listener, self).__init__()
-        self.pyramidal_rnn = PyramidalBiLSTM(units=units)
+        self.pyramidal_rnn = PyramidalBiLSTM(input_shape=input_shape, units=units)
 
     def call(self, x):
         # FIXME: assert x.shape[0] == 32 (batch)
@@ -20,27 +20,27 @@ class Listener(Encoder):
 
 class PyramidalBiLSTM(tf.keras.layers.Layer):
 
-    def __init__(self, units=256):
+    def __init__(self, input_shape, units=256):
         super(PyramidalBiLSTM, self).__init__()
         self.bottom = tf.keras.layers.Bidirectional(
-            tf.keras.layers.LSTM(units, return_sequences=True)
+            tf.keras.layers.LSTM(units, input_shape=input_shape, return_sequences=True)
         )
-        self.stack = tf.keras.Sequential([
+        self.pyramid = [
             tf.keras.layers.Bidirectional(
                 tf.keras.layers.LSTM(units, return_sequences=True)
             ),
             tf.keras.layers.Bidirectional(
                 tf.keras.layers.LSTM(units, return_sequences=True)
             )
-        ])
+        ]
 
     def call(self, x):
         h = self.bottom(x)
-        for layer in self.stack.layers:
+        for layer in self.pyramid:
+            if h.shape[1] % 2 == 1:
+                h = tf.keras.layers.ZeroPadding1D(padding=(0, 1))(h)
             h = tf.reshape(h, (h.shape[0], -1, h.shape[-1] * 2))
             h = layer(h)
-        # if h.shape[1] % 2 == 1:
-        #     h = tf.keras.layers.ZeroPadding1D(padding=(0, 1))(h)
         return h
 
 
