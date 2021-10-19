@@ -13,7 +13,12 @@ class Sequence2Sequence(tf.keras.Model):
         self.decoder = decoder
 
     def call(self, x, training=True):
-        x, tokens = x
+        if training:
+            x, tokens = x
+        else:
+            x = tf.expand_dims(x, axis=0)
+            tokens = tf.convert_to_tensor([2] * x.shape[1], dtype=tf.float32)
+            tokens = tf.expand_dims(tokens, axis=0)
         # Listen
         h = self.encoder(x)
         # Attend and Spell
@@ -27,7 +32,7 @@ class Sequence2Sequence(tf.keras.Model):
             y_pred = self((x, y))
             loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
 
-        y_pred = tf.math.argmax(y_pred, axis=-1)
+        # y_pred = tf.math.argmax(y_pred, axis=-1)
         trainable_vars = self.trainable_variables
         gradients = tape.gradient(loss, trainable_vars)
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))

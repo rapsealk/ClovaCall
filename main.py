@@ -1,4 +1,5 @@
 import argparse
+import os
 import json
 
 import numpy as np
@@ -12,6 +13,7 @@ from las.tensorflow_impl.losses import CTCLoss
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-lr', '--learning-rate', type=float, default=5e-5)
+parser.add_argument('--epochs', type=int, default=40)
 parser.add_argument('--batch-size', type=int, default=32)
 parser.add_argument('--max-length', type=int, default=40)
 args = parser.parse_args()
@@ -26,6 +28,7 @@ tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=NUM_WORDS, char_leve
 def postprocess_tokens(tokens):
     for i, token in enumerate(tokens):
         tokens[i] = np.append(token[:MAX_SENTENCE_LENGTH], [0] * (MAX_SENTENCE_LENGTH - len(token)))
+        tokens[i] = np.asarray(tokens[i], dtype=np.uint8) - 1
     return tokens
 
 
@@ -147,6 +150,7 @@ def main():
 
     transcripts = ds['train'].map(lambda x: x['text'])
     transcripts = [t.numpy().decode('utf-8') for t in transcripts]
+    tokenizer.fit_on_texts(['$', '#'])  # $: <sos>, #: <eos>
     tokenizer.fit_on_texts(transcripts)
 
     word_counts = json.loads(tokenizer.get_config()['word_counts'])
@@ -181,24 +185,44 @@ def main():
     for item in ds_train.take(1):
         audio_shape = item['audio'].shape
         text_shape = item['text'].shape
-        print('audio_shape:', audio_shape)
 
     ds_train = ds_train.map(lambda x: set_shapes(x, audio=audio_shape, text=text_shape))
     ds_train = ds_train.map(lambda x: (x['audio'], x['text']))
 
     oov_token_index = json.loads(tokenizer.get_config()['word_index'])[tokenizer.get_config()['oov_token']]
+    print('oov_token_index:', oov_token_index)
 
     # Model
     encoder = Listener(input_shape=(batch_size,)+audio_shape)
     decoder = Speller(output_shape=NUM_WORDS)
     model = Sequence2Sequence(encoder, decoder)
 
+    checkpoint_filepath = os.path.join(os.path.dirname(__file__), 'checkpoint')
+    checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_filepath,
+        save_weights_only=True,
+        monitor='accuracy',
+        mode='max',
+        save_best_only=True)
+
     # ValueError: Weights for model sequential have not yet been created. Weights are created when the Model is first called on inputs or `build()` is called with an `input_shape`.
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate, beta_1=0.9, beta_2=0.98, epsilon=1e-9),
                   loss=CTCLoss(label_length=MAX_SENTENCE_LENGTH, blank_index=oov_token_index),
-                  metrics=['mse'])
+                  metrics=['sparse_categorical_accuracy', 'sparse_categorical_crossentropy'])  # , 'mse'
 
-    hist = model.fit(ds_train.batch(batch_size, drop_remainder=True), verbose=1)
+    with tf.device('/GPU:0'):
+        # 338/2028 [====>.........................] - ETA: 1:24:15 - loss: nan - mse: 23260.0879
+        hist = model.fit(ds_train.batch(batch_size, drop_remainder=True), epochs=args.epochs, verbose=1,
+                         callbacks=[checkpoint_callback])
+
+    print(hist.history)
+
+    """
+    with tf.device('/CPU:0'):
+        output = model.predict(ds_train.take(batch_size))
+        print(output)
+        print(output.shape)
+    """
 
 
 if __name__ == "__main__":
