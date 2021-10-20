@@ -162,7 +162,7 @@ def main():
     transcripts = ds['train'].map(lambda x: x['text'])
     transcripts = [t.numpy().decode('utf-8') for t in transcripts]
 
-    tokenizer_path = os.path.join(os.path.abspath('.'), 'tokenizer.json')
+    tokenizer_path = os.path.join(os.path.dirname(__file__), 'tokenizer.json')
     if os.path.exists(tokenizer_path):
         with open(tokenizer_path, 'r', encoding='utf-8') as f:
             tokenizer_json = json.load(f)
@@ -217,7 +217,7 @@ def main():
     decoder = Speller(output_shape=NUM_WORDS)
     model = Sequence2Sequence(encoder, decoder)
 
-    checkpoint_path = os.path.join(os.path.abspath('.'), 'checkpoint.ckpt')
+    checkpoint_path = os.path.join(os.path.dirname(__file__), 'checkpoint.ckpt')
     checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
         filepath=checkpoint_path,
         save_weights_only=True,
@@ -243,33 +243,23 @@ def main():
     """
 
     with tf.device('/CPU:0'):
-        outputs = model.predict(ds_train.take(batch_size))
-        outputs = tf.math.argmax(outputs, axis=-1).numpy()
-        outputs = tokenizer.sequences_to_texts(outputs)
-
-        for i, output in enumerate(outputs):
-            print(f'[Train] y_pred[{i}]: {output.rstrip()}')
+        for batch in ds_train.take(1).batch(1):
+            # print(f'[Train] batch: {batch}')
+            output = model(batch)
+            output = tf.math.argmax(output, axis=-1).numpy()
+            output = tokenizer.sequences_to_texts(output)
+            # print(f'[Train] y_pred: {output}')
 
         ds_test = ds['test'].map(tf_preprocess_dataset)
         ds_test = ds_test.map(lambda x: set_shapes(x, audio=audio_shape, text=text_shape))
         ds_test = ds_test.map(lambda x: (x['audio'], x['text']))
 
-        outputs = model.predict(ds_test.take(batch_size))
-        outputs = tf.math.argmax(outputs, axis=-1).numpy()
-        outputs = tokenizer.sequences_to_texts(outputs)
-
-        for i, output in enumerate(outputs):
-            print(f'[Test] y_pred[{i}]: {output.rstrip()}')
-
-        """
-        for batch in ds_train.batch(batch_size):
-            output = model.predict(batch)
-            output = tf.math.argmax(output, axis=-1).numpy() + 1
-            for (_, transcript), decoded in zip(batch, output):
-                decoded = tokenizer.sequences_to_texts(decoded)
-                print(f'Transcript: {transcript}')
-                print(f'Decoded: {decoded}')
-        """
+        for batch in ds_test.take(1).batch(1):
+            # print(f'[Test] batch: {batch}')
+            output = model(batch)
+            output = tf.math.argmax(output, axis=-1).numpy()
+            output = tokenizer.sequences_to_texts(output)
+            # print(f'[Test] y_pred: {output}')
 
 
 if __name__ == "__main__":
