@@ -9,10 +9,10 @@ class Speller(Decoder):
 
     def __init__(self, units=512, output_shape=46):
         super(Speller, self).__init__()
-        self.cells = [tf.keras.layers.LSTMCell(units),
-                      tf.keras.layers.LSTMCell(units)]
+        self.cells = [tf.keras.layers.LSTMCell(units, kernel_initializer=tf.keras.initializers.RandomUniform(-0.1, 0.1)),
+                      tf.keras.layers.LSTMCell(units, kernel_initializer=tf.keras.initializers.RandomUniform(-0.1, 0.1))]
         self.attention = tf.keras.layers.Attention()
-        self.character_distribution = tf.keras.layers.Dense(output_shape)
+        self.character_distribution = tf.keras.layers.Dense(output_shape, kernel_initializer=tf.keras.initializers.RandomUniform(-0.1, 0.1))
 
         self.units = units
 

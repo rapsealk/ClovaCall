@@ -23,14 +23,14 @@ class PyramidalBiLSTM(tf.keras.layers.Layer):
     def __init__(self, input_shape, units=256):
         super(PyramidalBiLSTM, self).__init__()
         self.bottom = tf.keras.layers.Bidirectional(
-            tf.keras.layers.LSTM(units, input_shape=input_shape, return_sequences=True)
+            tf.keras.layers.LSTM(units, input_shape=input_shape, return_sequences=True, kernel_initializer=tf.keras.initializers.RandomUniform(-0.1, 0.1))
         )
         self.pyramid = [
             tf.keras.layers.Bidirectional(
-                tf.keras.layers.LSTM(units, return_sequences=True)
+                tf.keras.layers.LSTM(units, return_sequences=True, kernel_initializer=tf.keras.initializers.RandomUniform(-0.1, 0.1))
             ),
             tf.keras.layers.Bidirectional(
-                tf.keras.layers.LSTM(units, return_sequences=True)
+                tf.keras.layers.LSTM(units, return_sequences=True, kernel_initializer=tf.keras.initializers.RandomUniform(-0.1, 0.1))
             )
         ]
 
