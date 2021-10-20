@@ -9,7 +9,6 @@ import tensorflow_datasets as tfds
 
 import datasets.aihub_dataset   # noqa: F401
 from las.tensorflow_impl.models import Listener, Speller, Sequence2Sequence
-from las.tensorflow_impl.losses import CTCLoss
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-lr', '--learning-rate', type=float, default=5e-5)
@@ -203,12 +202,12 @@ def main():
         save_weights_only=True,
         monitor='accuracy',
         mode='max',
-        save_best_only=True)
+        save_best_only=False)
 
     # ValueError: Weights for model sequential have not yet been created. Weights are created when the Model is first called on inputs or `build()` is called with an `input_shape`.
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate, beta_1=0.9, beta_2=0.98, epsilon=1e-9),
-                  loss=CTCLoss(label_length=MAX_SENTENCE_LENGTH, blank_index=oov_token_index),
-                  metrics=['sparse_categorical_accuracy', 'sparse_categorical_crossentropy'])  # , 'mse'
+                  loss='sparse_categorical_crossentropy',
+                  metrics=['sparse_categorical_accuracy', 'sparse_categorical_crossentropy'])
 
     with tf.device('/GPU:0'):
         # 338/2028 [====>.........................] - ETA: 1:24:15 - loss: nan - mse: 23260.0879
