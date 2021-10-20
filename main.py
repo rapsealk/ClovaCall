@@ -20,14 +20,26 @@ args = parser.parse_args()
 NUM_WORDS = 128
 MAX_SENTENCE_LENGTH = args.max_length
 
-# https://www.tensorflow.org/api_docs/python/tf/keras/preprocessing/text/Tokenizer
-tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=NUM_WORDS, char_level=True, oov_token='@')
+tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=None, char_level=True, oov_token=None)
 
 
 def postprocess_tokens(tokens):
     for i, token in enumerate(tokens):
+        """
+        # num_words=NUM_WORDS, oov_token=None
+        i, token: 0, [list([11]) list([39]) list([24]) list([1]) list([18]) list([6]) list([1])
+                      list([45]) list([82]) list([]) list([1]) list([]) list([45]) list([62])
+                      list([10]) list([1]) list([]) list([]) list([8]) list([1]) list([28])
+                      list([5]) list([2]) list([1]) list([51]) list([6]) list([19])]
+        # num_words=NUM_WORDS, oov_token='@'
+        i, token: 0, [12 40 25  2 19  7  2 46 83  1  2  1 46 63 11  2  1  1  9  2 29  6  3  2
+                      52  7 20]
+        # num_words=None, oov_token=None
+        i, token: 0, [ 11  39  24   1  18   6   1  45  82 197   1 161  45  62  10   1 694 139
+                        8   1  28   5   2   1  51   6  19]
+        """
         tokens[i] = np.append(token[:MAX_SENTENCE_LENGTH], [0] * (MAX_SENTENCE_LENGTH - len(token)))
-        tokens[i] = np.asarray(tokens[i], dtype=np.uint8) - 1
+        tokens[i] = np.asarray(tokens[i], dtype=np.uint8)
     return tokens
 
 
@@ -149,8 +161,17 @@ def main():
 
     transcripts = ds['train'].map(lambda x: x['text'])
     transcripts = [t.numpy().decode('utf-8') for t in transcripts]
-    tokenizer.fit_on_texts(['$', '#'])  # $: <sos>, #: <eos>
-    tokenizer.fit_on_texts(transcripts)
+
+    tokenizer_path = os.path.join(os.path.abspath('.'), 'tokenizer.json')
+    if os.path.exists(tokenizer_path):
+        with open(tokenizer_path, 'r', encoding='utf-8') as f:
+            tokenizer_json = json.load(f)
+        tokenizer = tf.keras.preprocessing.text.tokenizer_from_json(tokenizer_json)
+    else:
+        # tokenizer.fit_on_texts(['$', '#'])  # $: <sos>, #: <eos>
+        tokenizer.fit_on_texts(transcripts)
+        with open(tokenizer_path, 'w', encoding='utf-8') as f:
+            f.write(json.dumps(tokenizer.to_json(), ensure_ascii=False))
 
     word_counts = json.loads(tokenizer.get_config()['word_counts'])
     # print(word_counts)
@@ -188,7 +209,7 @@ def main():
     ds_train = ds_train.map(lambda x: set_shapes(x, audio=audio_shape, text=text_shape))
     ds_train = ds_train.map(lambda x: (x['audio'], x['text']))
 
-    oov_token_index = json.loads(tokenizer.get_config()['word_index'])[tokenizer.get_config()['oov_token']]
+    oov_token_index = json.loads(tokenizer.get_config()['word_index']).get(tokenizer.get_config()['oov_token'], -1)
     print('oov_token_index:', oov_token_index)
 
     # Model
@@ -196,9 +217,9 @@ def main():
     decoder = Speller(output_shape=NUM_WORDS)
     model = Sequence2Sequence(encoder, decoder)
 
-    checkpoint_filepath = os.path.join(os.path.dirname(__file__), 'checkpoint')
+    checkpoint_path = os.path.join(os.path.abspath('.'), 'checkpoint.ckpt')
     checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-        filepath=checkpoint_filepath,
+        filepath=checkpoint_path,
         save_weights_only=True,
         monitor='accuracy',
         mode='max',
@@ -209,19 +230,46 @@ def main():
                   loss='sparse_categorical_crossentropy',
                   metrics=['sparse_categorical_accuracy', 'sparse_categorical_crossentropy'])
 
+    if os.path.exists(checkpoint_path):
+        model.load_weights(checkpoint_path)
+
+    """
     with tf.device('/GPU:0'):
         # 338/2028 [====>.........................] - ETA: 1:24:15 - loss: nan - mse: 23260.0879
         hist = model.fit(ds_train.batch(batch_size, drop_remainder=True), epochs=args.epochs, verbose=1,
                          callbacks=[checkpoint_callback])
 
     print(hist.history)
+    """
 
-    """
     with tf.device('/CPU:0'):
-        output = model.predict(ds_train.take(batch_size))
-        print(output)
-        print(output.shape)
-    """
+        outputs = model.predict(ds_train.take(batch_size))
+        outputs = tf.math.argmax(outputs, axis=-1).numpy()
+        outputs = tokenizer.sequences_to_texts(outputs)
+
+        for i, output in enumerate(outputs):
+            print(f'[Train] y_pred[{i}]: {output.rstrip()}')
+
+        ds_test = ds['test'].map(tf_preprocess_dataset)
+        ds_test = ds_test.map(lambda x: set_shapes(x, audio=audio_shape, text=text_shape))
+        ds_test = ds_test.map(lambda x: (x['audio'], x['text']))
+
+        outputs = model.predict(ds_test.take(batch_size))
+        outputs = tf.math.argmax(outputs, axis=-1).numpy()
+        outputs = tokenizer.sequences_to_texts(outputs)
+
+        for i, output in enumerate(outputs):
+            print(f'[Test] y_pred[{i}]: {output.rstrip()}')
+
+        """
+        for batch in ds_train.batch(batch_size):
+            output = model.predict(batch)
+            output = tf.math.argmax(output, axis=-1).numpy() + 1
+            for (_, transcript), decoded in zip(batch, output):
+                decoded = tokenizer.sequences_to_texts(decoded)
+                print(f'Transcript: {transcript}')
+                print(f'Decoded: {decoded}')
+        """
 
 
 if __name__ == "__main__":
