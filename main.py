@@ -11,6 +11,7 @@ import datasets.aihub_dataset   # noqa: F401
 from las.tensorflow_impl.models import Listener, Speller, Sequence2Sequence
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--train', action='store_true', default=False)
 parser.add_argument('-lr', '--learning-rate', type=float, default=5e-5)
 parser.add_argument('--epochs', type=int, default=40)
 parser.add_argument('--batch-size', type=int, default=32)
@@ -217,7 +218,10 @@ def main():
     decoder = Speller(output_shape=NUM_WORDS)
     model = Sequence2Sequence(encoder, decoder)
 
-    checkpoint_path = os.path.join(os.path.dirname(__file__), 'checkpoint.ckpt')
+    if args.train:
+        checkpoint_path = os.path.join(os.path.dirname(__file__), 'checkpoint.ckpt')
+    else:
+        checkpoint_path = os.path.join(os.path.dirname(__file__), 'checkpoints', 'checkpoint.ckpt')
     checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
         filepath=checkpoint_path,
         save_weights_only=True,
@@ -233,33 +237,40 @@ def main():
     if os.path.exists(checkpoint_path):
         model.load_weights(checkpoint_path)
 
-    """
-    with tf.device('/GPU:0'):
-        # 338/2028 [====>.........................] - ETA: 1:24:15 - loss: nan - mse: 23260.0879
-        hist = model.fit(ds_train.batch(batch_size, drop_remainder=True), epochs=args.epochs, verbose=1,
-                         callbacks=[checkpoint_callback])
+    if args.train:
+        with tf.device('/GPU:0'):
+            # 338/2028 [====>.........................] - ETA: 1:24:15 - loss: nan - mse: 23260.0879
+            hist = model.fit(ds_train.batch(batch_size, drop_remainder=True), epochs=args.epochs, verbose=1,
+                             callbacks=[checkpoint_callback])
 
-    print(hist.history)
-    """
+        print(hist.history)
+    else:
+        with tf.device('/CPU:0'):
+            for batch in ds_train.take(1).batch(1):
+                output = model(batch)
+                output = tf.math.argmax(output, axis=-1).numpy()
+                output = tokenizer.sequences_to_texts(output)
+                print(f'[Train] Teacher y_pred: {output}')
 
-    with tf.device('/CPU:0'):
-        for batch in ds_train.take(1).batch(1):
-            # print(f'[Train] batch: {batch}')
-            output = model(batch)
+            output = model.predict(ds_train.take(1))
             output = tf.math.argmax(output, axis=-1).numpy()
             output = tokenizer.sequences_to_texts(output)
-            # print(f'[Train] y_pred: {output}')
+            print(f'[Train] y_pred: {output}')
 
-        ds_test = ds['test'].map(tf_preprocess_dataset)
-        ds_test = ds_test.map(lambda x: set_shapes(x, audio=audio_shape, text=text_shape))
-        ds_test = ds_test.map(lambda x: (x['audio'], x['text']))
+            ds_test = ds['test'].map(tf_preprocess_dataset)
+            ds_test = ds_test.map(lambda x: set_shapes(x, audio=audio_shape, text=text_shape))
+            ds_test = ds_test.map(lambda x: (x['audio'], x['text']))
 
-        for batch in ds_test.take(1).batch(1):
-            # print(f'[Test] batch: {batch}')
-            output = model(batch)
+            for batch in ds_test.take(1).batch(1):
+                output = model(batch)
+                output = tf.math.argmax(output, axis=-1).numpy()
+                output = tokenizer.sequences_to_texts(output)
+                print(f'[Test] Teacher y_pred: {output}')
+
+            output = model.predict(ds_test.take(1))
             output = tf.math.argmax(output, axis=-1).numpy()
             output = tokenizer.sequences_to_texts(output)
-            # print(f'[Test] y_pred: {output}')
+            print(f'[Test] y_pred: {output}')
 
 
 if __name__ == "__main__":

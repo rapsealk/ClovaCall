@@ -21,7 +21,7 @@ class Speller(Decoder):
         context = tf.zeros((y.shape[0], self.units))
         hiddens = [cell.get_initial_state(tf.concat([tf.expand_dims(y[:, 0], axis=1), context], axis=-1))
                    for cell in self.cells]
-        dist = tf.zeros((y.shape[0], self.num_words))   # y_hat
+        y_hat = tf.zeros((y.shape[0], self.num_words))
 
         distributions = []
         for i in range(y.shape[1]):
@@ -30,17 +30,19 @@ class Speller(Decoder):
             param:values: Encoder outputs, Shape=(B, enc_T, enc_D)
             param:last_attn: Attention weight of previous step, Shape=(batch, enc_T)
             """
-            x = tf.concat([hiddens[0][0], tf.expand_dims(y[:, i], axis=1), context, dist], axis=-1)
+            x = tf.concat([hiddens[0][0], tf.expand_dims(y[:, i], axis=1), context, y_hat], axis=-1)
             s, hiddens[0] = self.cells[0](x, hiddens[0])
             s = tf.expand_dims(s, axis=1)
             context, attn_w = self.attention([s, h], return_attention_scores=True)
             context = tf.squeeze(context, axis=1)
             s, hiddens[1] = self.cells[1](context, hiddens[1])
             dist = self.character_distribution(tf.concat([s, context], axis=-1))
-            distributions.append(dist)
+            # y_hat = argmax(log(P(y|x)))   # [batch, num_chars]
+            y_hat = tf.nn.log_softmax(dist, axis=-1)
+            distributions.append(y_hat)
 
         distributions = tf.transpose(distributions, perm=[1, 0, 2])
 
         # prob = tf.nn.softmax(distributions, axis=-1)
-        prob = tf.nn.log_softmax(distributions, axis=-1)
-        return prob
+        # prob = tf.nn.log_softmax(distributions, axis=-1)
+        return distributions
