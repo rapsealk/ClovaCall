@@ -12,7 +12,7 @@ from las.tensorflow_impl.models import Listener, Speller, Sequence2Sequence
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--train', action='store_true', default=False)
-parser.add_argument('-lr', '--learning-rate', type=float, default=5e-5)
+parser.add_argument('-lr', '--learning-rate', type=float, default=0.2)
 parser.add_argument('--epochs', type=int, default=40)
 parser.add_argument('--batch-size', type=int, default=32)
 parser.add_argument('--max-length', type=int, default=40)
@@ -218,10 +218,16 @@ def main():
     decoder = Speller(output_shape=NUM_WORDS)
     model = Sequence2Sequence(encoder, decoder)
 
+    # Learning Rate
+    def scheduler(epoch, lr):
+        return lr * 0.98
+
+    lr_callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
+
     if args.train:
         checkpoint_path = os.path.join(os.path.dirname(__file__), 'checkpoint.ckpt')
     else:
-        checkpoint_path = os.path.join(os.path.dirname(__file__), 'checkpoints', 'checkpoint.ckpt')
+        checkpoint_path = os.path.join(os.path.dirname(__file__), 'checkpoints', 'softmax-11epochs', 'checkpoint.ckpt')
     checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
         filepath=checkpoint_path,
         save_weights_only=True,
@@ -241,7 +247,7 @@ def main():
         with tf.device('/GPU:0'):
             # 338/2028 [====>.........................] - ETA: 1:24:15 - loss: nan - mse: 23260.0879
             hist = model.fit(ds_train.batch(batch_size, drop_remainder=True), epochs=args.epochs, verbose=1,
-                             callbacks=[checkpoint_callback])
+                             callbacks=[checkpoint_callback, lr_callback])
 
         print(hist.history)
     else:
