@@ -18,10 +18,7 @@ parser.add_argument('--batch-size', type=int, default=32)
 parser.add_argument('--max-length', type=int, default=40)
 args = parser.parse_args()
 
-NUM_WORDS = 128
 MAX_SENTENCE_LENGTH = args.max_length
-
-tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=None, char_level=True, oov_token=None)
 
 
 def postprocess_tokens(tokens):
@@ -150,7 +147,6 @@ def tf_preprocess_dataset(ds):
 
 def main():
     global tokenizer
-    global NUM_WORDS
     global MAX_SENTENCE_LENGTH
 
     # Dataset
@@ -169,6 +165,7 @@ def main():
             tokenizer_json = json.load(f)
         tokenizer = tf.keras.preprocessing.text.tokenizer_from_json(tokenizer_json)
     else:
+        tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=None, char_level=True, oov_token='@')
         # tokenizer.fit_on_texts(['$', '#'])  # $: <sos>, #: <eos>
         tokenizer.fit_on_texts(transcripts)
         with open(tokenizer_path, 'w', encoding='utf-8') as f:
@@ -177,10 +174,10 @@ def main():
     word_counts = json.loads(tokenizer.get_config()['word_counts'])
     # print(word_counts)
     MAX_SENTENCE_LENGTH = max(tuple(map(lambda x: len(x), transcripts)))
-    NUM_WORDS = len(word_counts)
+    vocab_size = len(word_counts)
 
     print(f'MAX_SENTENCE_LENGTH: {MAX_SENTENCE_LENGTH}')
-    print(f'NUM_WORDS: {NUM_WORDS}')
+    print(f'vocab_size: {vocab_size}')
 
     """
     print(f'[Transcripts] {transcripts[:3]}')
@@ -215,7 +212,7 @@ def main():
 
     # Model
     encoder = Listener(input_shape=(batch_size,)+audio_shape)
-    decoder = Speller(output_shape=NUM_WORDS)
+    decoder = Speller(vocab_size=vocab_size)
     model = Sequence2Sequence(encoder, decoder)
 
     # Learning Rate
@@ -227,7 +224,7 @@ def main():
     if args.train:
         checkpoint_path = os.path.join(os.path.dirname(__file__), 'checkpoint.ckpt')
     else:
-        checkpoint_path = os.path.join(os.path.dirname(__file__), 'checkpoints', 'softmax-11epochs', 'checkpoint.ckpt')
+        checkpoint_path = os.path.join(os.path.dirname(__file__), 'checkpoints', 'checkpoint.ckpt')
     checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
         filepath=checkpoint_path,
         save_weights_only=True,
