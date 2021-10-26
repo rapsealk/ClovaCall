@@ -22,11 +22,12 @@ MAX_SENTENCE_LENGTH = args.max_length
 
 SOS_TOKEN = '$'
 EOS_TOKEN = '#'
+EOS_TOKEN_INDEX = 0
 
 
 def postprocess_tokens(tokens):
     for i, token in enumerate(tokens):
-        tokens[i] = np.append(token[:MAX_SENTENCE_LENGTH], [0] * (MAX_SENTENCE_LENGTH - len(token)))
+        tokens[i] = np.append(token[:MAX_SENTENCE_LENGTH], [EOS_TOKEN_INDEX] * (MAX_SENTENCE_LENGTH - len(token)))
         tokens[i] = np.asarray(tokens[i], dtype=np.uint8)
     return tokens
 
@@ -121,7 +122,8 @@ def preprocess_dataset(audio, text):
     # audio = _generate_spectrogram(audio)
     audio = _generate_log_mel_filter_bank_spectrum(audio)
 
-    if not (text := text.numpy().decode('utf-8')):    # text == '' (test)
+    text = text.numpy().decode('utf-8')
+    if not text:    # text == '' (test)
         text = [SOS_TOKEN]
     text = tokenizer.texts_to_sequences(text)
     text = np.asarray(text).squeeze()
@@ -140,6 +142,7 @@ def tf_preprocess_dataset(ds):
 def main():
     global tokenizer
     global MAX_SENTENCE_LENGTH
+    global EOS_TOKEN_INDEX
 
     # Dataset
     ds = tfds.load('aihub_dataset')
@@ -163,7 +166,8 @@ def main():
             f.write(json.dumps(tokenizer.to_json(), ensure_ascii=False))
 
     word_counts = json.loads(tokenizer.get_config()['word_counts'])
-    # print(word_counts)
+    EOS_TOKEN_INDEX = json.loads(tokenizer.get_config()['word_index'])[EOS_TOKEN]
+
     MAX_SENTENCE_LENGTH = max(tuple(map(lambda x: len(x), transcripts)))
     vocab_size = len(word_counts)
 
