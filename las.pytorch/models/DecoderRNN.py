@@ -65,9 +65,9 @@ class DecoderRNN(nn.Module):
         attn_w_all = []
         for i in range(embedded.size(1)):
             embedded_inputs = embedded[:, i, :] # (B, dec_D)
-            
+
             rnn_input = torch.cat([embedded_inputs, context], dim=1) # (B, dec_D + enc_D)
-            rnn_input = rnn_input.unsqueeze(1) 
+            rnn_input = rnn_input.unsqueeze(1)
             output, hidden = self.rnn(rnn_input, hidden) # (B, 1, dec_D)
 
             context, attn_w = self.attention(output, encoder_outputs, attn_w) # (B, 1, enc_D), (B, enc_T)
