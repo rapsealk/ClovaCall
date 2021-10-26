@@ -12,30 +12,20 @@ from las.tensorflow_impl.models import Listener, Speller, Sequence2Sequence
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--train', action='store_true', default=False)
-parser.add_argument('-lr', '--learning-rate', type=float, default=0.2)
-parser.add_argument('--epochs', type=int, default=40)
+parser.add_argument('-lr', '--learning-rate', type=float, default=3e-4)
+parser.add_argument('--epochs', type=int, default=100)
 parser.add_argument('--batch-size', type=int, default=32)
 parser.add_argument('--max-length', type=int, default=40)
 args = parser.parse_args()
 
 MAX_SENTENCE_LENGTH = args.max_length
 
+SOS_TOKEN = '$'
+EOS_TOKEN = '#'
+
 
 def postprocess_tokens(tokens):
     for i, token in enumerate(tokens):
-        """
-        # num_words=NUM_WORDS, oov_token=None
-        i, token: 0, [list([11]) list([39]) list([24]) list([1]) list([18]) list([6]) list([1])
-                      list([45]) list([82]) list([]) list([1]) list([]) list([45]) list([62])
-                      list([10]) list([1]) list([]) list([]) list([8]) list([1]) list([28])
-                      list([5]) list([2]) list([1]) list([51]) list([6]) list([19])]
-        # num_words=NUM_WORDS, oov_token='@'
-        i, token: 0, [12 40 25  2 19  7  2 46 83  1  2  1 46 63 11  2  1  1  9  2 29  6  3  2
-                      52  7 20]
-        # num_words=None, oov_token=None
-        i, token: 0, [ 11  39  24   1  18   6   1  45  82 197   1 161  45  62  10   1 694 139
-                        8   1  28   5   2   1  51   6  19]
-        """
         tokens[i] = np.append(token[:MAX_SENTENCE_LENGTH], [0] * (MAX_SENTENCE_LENGTH - len(token)))
         tokens[i] = np.asarray(tokens[i], dtype=np.uint8)
     return tokens
@@ -44,8 +34,8 @@ def postprocess_tokens(tokens):
 def _generate_spectrogram(audio: np.ndarray):
     audio = tf.cast(audio, dtype=tf.float32) / 32768.0
     # Trim the noise
-    #start, stop = tfio.audio.trim(audio, axis=0, epsilon=0.1)
-    #audio = audio[start:stop]
+    start, stop = tfio.audio.trim(audio, axis=0, epsilon=0.1)
+    audio = audio[start:stop]
     # Fade In and Fade Out
     #audio = tfio.audio.fade(audio, fade_in=1000, fade_out=2000, mode='logarithmic')
     # Spectrogram
@@ -131,7 +121,9 @@ def preprocess_dataset(audio, text):
     # audio = _generate_spectrogram(audio)
     audio = _generate_log_mel_filter_bank_spectrum(audio)
 
-    text = tokenizer.texts_to_sequences(text.numpy().decode('utf-8'))
+    if not (text := text.numpy().decode('utf-8')):    # text == '' (test)
+        text = [SOS_TOKEN]
+    text = tokenizer.texts_to_sequences(text)
     text = np.asarray(text).squeeze()
     text = postprocess_tokens([text])
     text = tf.convert_to_tensor(text, dtype=tf.float32)
@@ -152,7 +144,6 @@ def main():
     # Dataset
     ds = tfds.load('aihub_dataset')
 
-    # max_length = args.max_length
     learning_rate = args.learning_rate
     batch_size = args.batch_size
 
@@ -166,7 +157,7 @@ def main():
         tokenizer = tf.keras.preprocessing.text.tokenizer_from_json(tokenizer_json)
     else:
         tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=None, char_level=True, oov_token='@')
-        # tokenizer.fit_on_texts(['$', '#'])  # $: <sos>, #: <eos>
+        tokenizer.fit_on_texts([SOS_TOKEN, EOS_TOKEN])  # $: <sos>, #: <eos>
         tokenizer.fit_on_texts(transcripts)
         with open(tokenizer_path, 'w', encoding='utf-8') as f:
             f.write(json.dumps(tokenizer.to_json(), ensure_ascii=False))
@@ -217,7 +208,8 @@ def main():
 
     # Learning Rate
     def scheduler(epoch, lr):
-        return lr * 0.98
+        # return lr * 0.98
+        return lr
 
     lr_callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
 
@@ -242,10 +234,8 @@ def main():
 
     if args.train:
         with tf.device('/GPU:0'):
-            # 338/2028 [====>.........................] - ETA: 1:24:15 - loss: nan - mse: 23260.0879
             hist = model.fit(ds_train.batch(batch_size, drop_remainder=True), epochs=args.epochs, verbose=1,
                              callbacks=[checkpoint_callback, lr_callback])
-
         print(hist.history)
     else:
         with tf.device('/CPU:0'):
