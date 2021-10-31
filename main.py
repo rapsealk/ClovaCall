@@ -10,6 +10,16 @@ import tensorflow_datasets as tfds
 import datasets.aihub_dataset   # noqa: F401
 from las.tensorflow_impl.models import Listener, Speller, Sequence2Sequence
 
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        logical_gpus = tf.config.list_logical_devices('GPU')
+        print(f'{len(gpus)} Physical GPUs, {len(logical_gpus)} Logical GPUs')
+    except RuntimeError as e:
+        print(e)
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--train', action='store_true', default=False)
 parser.add_argument('-lr', '--learning-rate', type=float, default=3e-4)
@@ -125,8 +135,10 @@ def preprocess_dataset(audio, text):
     text = text.numpy().decode('utf-8')
     if not text:    # text == '' (test)
         text = [SOS_TOKEN]
-    text = tokenizer.texts_to_sequences(text)
-    text = np.asarray(text).squeeze()
+        text = tokenizer.texts_to_sequences(text)
+    else:
+        text = tokenizer.texts_to_sequences(text)
+        text = np.asarray(text).squeeze()
     text = postprocess_tokens([text])
     text = tf.convert_to_tensor(text, dtype=tf.float32)
     text = tf.squeeze(text)
@@ -153,7 +165,7 @@ def main():
     transcripts = ds['train'].map(lambda x: x['text'])
     transcripts = [t.numpy().decode('utf-8') for t in transcripts]
 
-    tokenizer_path = os.path.join(os.path.dirname(__file__), 'tokenizer.json')
+    tokenizer_path = os.path.join(os.path.dirname(__file__), 'checkpoints', 'tokenizer.json')
     if os.path.exists(tokenizer_path):
         with open(tokenizer_path, 'r', encoding='utf-8') as f:
             tokenizer_json = json.load(f)
