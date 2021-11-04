@@ -20,7 +20,7 @@ class Listener(Encoder):
 
 class PyramidalBiLSTM(tf.keras.layers.Layer):
 
-    def __init__(self, input_shape, units=256):
+    def __init__(self, input_shape, units=256, num_layers=3):
         super(PyramidalBiLSTM, self).__init__()
         self.bottom = tf.keras.layers.Bidirectional(
             tf.keras.layers.LSTM(units, input_shape=input_shape, return_sequences=True, kernel_initializer=tf.keras.initializers.RandomUniform(-0.1, 0.1))
