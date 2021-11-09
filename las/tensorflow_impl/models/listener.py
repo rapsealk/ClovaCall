@@ -51,6 +51,6 @@ class PyramidalBiGRU(tf.keras.layers.Layer):
 if __name__ == "__main__":
     inputs = np.random.uniform(-1.0, 1.0, (1, 4, 8))    # (batch, timesteps, feature)
     inputs = tf.convert_to_tensor(inputs)
-    model = Listener()
+    model = Listener(input_shape=inputs.shape[-1:])
     output = model(inputs)
     print(f'{inputs.shape} -> {output.shape}')
